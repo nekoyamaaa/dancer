@@ -1,0 +1,5 @@
+[Service]
+WorkingDirectory=%h/dancer
+ExecStart=python3 %i.py
+SyslogIdentifier=dancer.%i
+SyslogLevel=err
