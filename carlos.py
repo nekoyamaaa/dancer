@@ -11,15 +11,22 @@ class Bot(Client):
     ]
     CHANNEL_NAME = 'member-history'
 
+    def __init__(self, *args, **kwargs):
+        self.initialized = False
+        super().__init__(*args, **kwargs)
+
     async def on_ready(self):
+        if self.initialized:
+            return
+
         self.channels = dict()
         self.logger.info('Connected as {0.name} (ID: {0.id})'.format(self.user))
         for server in self.guilds:
-            # await self.prepare(server)
-            channel = discord.utils.find(lambda c: c.name == self.CHANNEL_NAME, server.channels)
-            if not channel:
-                channel = await server.create_text_channel(self.CHANNEL_NAME)
-            self.channels[server.id]= channel
+            await self.prepare(server)
+
+        if len(self.guilds) != len(self.channels):
+            raise Exception('I know %d guilds but I have only %d channels' % (len(self.guilds), len(self.channels)))
+
         try:
             await self.master.create_dm()
         except AttributeError:
@@ -30,13 +37,11 @@ class Bot(Client):
 
         self.logger.info('Invite: %s', self.invite_url)
 
+        self.initialized = True
+
     async def on_guild_join(self, server):
         self.logger.info('Bot joined to %s', server)
-        # await self.prepare(server)
-        channel = discord.utils.find(lambda c: c.name == self.CHANNEL_NAME, server.channels)
-        if not channel:
-            channel = await server.create_text_channel(self.CHANNEL_NAME)
-        self.channels[server.id]= channel
+        await self.prepare(server)
 
     async def on_guild_remove(self, server):
         del self.channels[server.id]
@@ -57,8 +62,11 @@ class Bot(Client):
             return
         channel = self.channels.get(member.guild.id)
         if not channel:
+            channel = await self.prepare(member.guild)
+
+        if not channel:
             self.logger.warning(
-                'Server %s (member: %s) not in the list',
+                'Server %s (member: %s) not in self.channels',
                 member.guild, member
             )
             return
@@ -76,16 +84,28 @@ class Bot(Client):
 
         try:
             await channel.send(message)
+        except discord.errors.NotFound as ex:
+            self.logger.error(
+                'Server %s (member: %s) removes the channel',
+                member.guild, member)
+            del self.channels[member.guild.id]
         except discord.errors.Forbidden as ex:
             # Bot has already left the guild, but still receives signal?
             self.logger.error('%s in guild: %s, member: %s', ex.__class__.__name__, channel.guild, message)
 
-    # TODO: await/async
-    def prepare(self, server):
+    async def prepare(self, server):
         channel = discord.utils.find(lambda c: c.name == self.CHANNEL_NAME, server.channels)
         if not channel:
-            channel = server.create_text_channel(self.CHANNEL_NAME)
-        self.channels[server.id] = channel
+            channel = await server.create_text_channel(self.CHANNEL_NAME)
+
+        if channel:
+            self.channels[server.id] = channel
+            return channel
+        else:
+            self.logger.warning(
+                'Failed to create my channel on %s',
+                channel
+            )
 
 APP_NAME = 'carlos'
 
