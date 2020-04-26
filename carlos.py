@@ -83,7 +83,7 @@ class Bot(Client):
             message += extra
 
         try:
-            await channel.send(message)
+            await self.send(channel, message)
         except discord.errors.NotFound as ex:
             self.logger.error(
                 'Server %s (member: %s) removes the channel',
@@ -96,6 +96,7 @@ class Bot(Client):
     async def prepare(self, server):
         channel = discord.utils.find(lambda c: c.name == self.CHANNEL_NAME, server.channels)
         if not channel:
+            self.logger.info("Creating my channel on %s", repr(server))
             channel = await server.create_text_channel(self.CHANNEL_NAME)
 
         if channel:
@@ -104,7 +105,7 @@ class Bot(Client):
         else:
             self.logger.warning(
                 'Failed to create my channel on %s',
-                channel
+                repr(server)
             )
 
 APP_NAME = 'carlos'
